@@ -1,0 +1,40 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    services:
+      mongo:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - run: npm ci
+      - run: |
+          # Wait for Mongo to be ready
+          for i in {1..30}; do
+            nc -z localhost 27017 && break || sleep 1
+          done
+          npm test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: testsecret
+          MONGO_URI: mongodb://localhost:27017/back_ghost
