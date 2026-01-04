@@ -25,7 +25,7 @@ router.post("/deposit", auth, async (req, res) => {
       amount,
       currency: "USD",
       orderId: tx._id.toString(),
-      callbackUrl: "https://ton-backend.com/api/webhook/oxapay",
+      callbackUrl: "https://back-ghost-1.onrender.com/api/webhook/oxapay",
       description: "Depot casino"
     },
     {

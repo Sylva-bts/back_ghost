@@ -7,10 +7,8 @@ require("dotenv").config();
 const app = express();
 
 app.get("/", (req, res) => res.send("Backend OK"));
-// CORS → autoriser ton front Netlify
-app.use(cors({
-  origin: process.env.FRONT_URL
-}));
+// CORS → autoriser ton front Netlify (temporairement ouvert pour debug)
+app.use(cors());
 
 // JSON
 app.use(express.json());
