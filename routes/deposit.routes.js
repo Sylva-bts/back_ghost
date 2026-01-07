@@ -3,12 +3,15 @@ const router = express.Router();
 const axios = require("axios");
 const Transaction = require("../models/Transaction");
 const auth = require("../middlewares/auth");
+const logger = require("../middlewares/logger");
+const { paymentLimiter } = require("../middlewares/rateLimiter");
 
-router.post("/deposit", auth, async (req, res) => {
+router.post("/deposit", paymentLimiter, auth, async (req, res) => {
   try {
     const amount = Number(req.body.amount);
-    if (amount < 1) {
-      return res.status(400).json({ error: "Dépôt minimum 1 USD" });
+    if (isNaN(amount) || amount < 1 || amount > 10000) {
+      logger.warn(`Invalid deposit amount: ${req.body.amount} by user ${req.userId}`);
+      return res.status(400).json({ error: "Montant invalide (1-10000 USD)" });
     }
 
     // 1️⃣ Transaction interne
