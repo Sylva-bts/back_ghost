@@ -20,17 +20,28 @@ router.post("/deposit", auth, async (req, res) => {
 
     // 2️⃣ Paiement OxaPay
     const oxa = await axios.post(
-      "https://api.oxapay.com/merchants/request",
+      "https://api.oxapay.com/v1/payment/invoice",
       {
         amount,
         currency: "USD",
-        orderId: tx._id.toString(),
-        callbackUrl: "https://back-ghost-1.onrender.com/api/webhook/oxapay",
-        description: "Depot casino"
+        lifetime: 30,
+        fee_paid_by_payer: 1,
+        under_paid_coverage: 2.5,
+        to_currency: "USDT",
+        auto_withdrawal: false,
+        mixed_payment: true,
+        callback_url: "https://back-ghost-1.onrender.com/api/webhook/oxapay",
+        return_url: "https://example.com/success",
+        email: "customer@oxapay.com",
+        order_id: tx._id.toString(),
+        thanks_message: "Thanks message",
+        description: "Depot casino",
+        sandbox: false
       },
       {
         headers: {
-          Authorization: process.env.OXAPAY_API_KEY
+          merchant_api_key: process.env.OXAPAY_API_KEY,
+          'Content-Type': 'application/json'
         }
       }
     );
