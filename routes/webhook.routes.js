@@ -1,7 +1,12 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const Transaction = require("../models/Transaction");
 const User = require("../models/User");
+const logger = require("../middlewares/logger");
+
+// Set to track processed webhooks
+const processedWebhooks = new Set();
 
 router.post("/oxapay", async (req, res) => {
   const { trackId, status, amount } = req.body;

@@ -51,7 +51,7 @@ router.post("/withdraw", paymentLimiter, auth, async (req, res) => {
       amount: numAmount,
       currency: "TRX",
       network: network || "TRC20",
-      callback_url: "https://back-ghost-1.onrender.com/api/webhook/oxapay",
+      callback_url: `${process.env.BASE_URL}/api/webhook/oxapay`,
       memo: tx._id.toString(),
       description: "Order #12345"
     };
