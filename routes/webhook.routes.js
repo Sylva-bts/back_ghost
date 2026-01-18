@@ -1,70 +1,67 @@
 const express = require("express");
 const router = express.Router();
-const Transaction = require("../models/Transaction");
-const User = require("../models/User");
+const logger = require("../middlewares/logger");
+const webhookService = require("../services/webhook");
 
+/**
+ * Webhook pour les notifications OxaPay
+ * Appelé par OxaPay quand le statut d'une transaction change
+ */
 router.post("/oxapay", async (req, res) => {
-  const { trackId, status, amount } = req.body;
+  try {
+    const { trackId, status, type, amount } = req.body;
 
-  // Find transaction
-  const tx = await Transaction.findOne({ oxapayTrackId: trackId });
-  if (!tx) return res.status(404).json({ error: "Transaction not found" });
-
-  if (tx.type === "deposit") {
-    if (status === "paid") {
-      // Atomic balance update
-      const session = await mongoose.startSession();
-      session.startTransaction();
-      try {
-        await User.findByIdAndUpdate(tx.userId, { $inc: { balance: tx.amount } }, { session });
-        tx.status = "completed";
-        await tx.save({ session });
-        await session.commitTransaction();
-      } catch (error) {
-        await session.abortTransaction();
-        throw error;
-      } finally {
-        session.endSession();
-      }
-    } else {
-      tx.status = "failed";
-      await tx.save();
+    // Validation basique des données
+    if (!trackId || !status) {
+      logger.warn(`Invalid webhook data: missing trackId or status`);
+      return res.status(400).json({ error: "Invalid webhook data" });
     }
-  } else if (tx.type === "withdraw") {
-    if (status === "paid") {
-      tx.status = "completed";
-      await tx.save();
-    } else {
-      // Atomic balance refund
-      const session = await mongoose.startSession();
-      session.startTransaction();
-      try {
-        await User.findByIdAndUpdate(tx.userId, { $inc: { balance: tx.amount } }, { session });
-        tx.status = "failed";
-        await tx.save({ session });
-        await session.commitTransaction();
-      } catch (error) {
-        await session.abortTransaction();
-        throw error;
-      } finally {
-        session.endSession();
-      }
+
+    // Traiter le webhook
+    const result = await webhookService.processWebhook({
+      trackId,
+      status,
+      type,
+      amount
+    });
+
+    // Retourner un succès à OxaPay
+    res.json({
+      success: true,
+      message: "Webhook processed",
+      trackId,
+      transactionStatus: result.status
+    });
+  } catch (error) {
+    logger.error(`Webhook error: ${error.message}`);
+    
+    // Retourner une erreur mais avec un statut 200 pour qu'OxaPay ne réessaie pas indéfiniment
+    res.status(200).json({
+      success: false,
+      error: error.message,
+      message: "Webhook received but processing failed"
+    });
+  }
+});
+
+/**
+ * Endpoint pour vérifier le statut d'une transaction via trackId
+ * À usage interne/API
+ */
+router.get("/transaction/:trackId", async (req, res) => {
+  try {
+    const { trackId } = req.params;
+
+    if (!trackId) {
+      return res.status(400).json({ error: "trackId required" });
     }
+
+    const status = await webhookService.getTransactionStatus(trackId);
+    res.json(status);
+  } catch (error) {
+    logger.error(`Transaction status check error: ${error.message}`);
+    res.status(404).json({ error: error.message });
   }
-
-  await tx.save();
-
-  // Mark as processed
-  processedWebhooks.add(trackId);
-
-  // Clean up old entries (keep last 1000)
-  if (processedWebhooks.size > 1000) {
-    const first = processedWebhooks.values().next().value;
-    processedWebhooks.delete(first);
-  }
-
-  logger.info(`Webhook processed successfully for trackId: ${trackId}, status: ${status}`);
-  res.json({ message: "Webhook processed" });
 });
 
 module.exports = router;
