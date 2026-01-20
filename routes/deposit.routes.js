@@ -32,7 +32,7 @@ router.post("/deposit", paymentLimiter, auth, async (req, res) => {
         to_currency: "USDT",
         auto_withdrawal: false,
         mixed_payment: true,
-        callback_url: `${process.env.BASE_URL}/api/webhook/oxapay`,
+        callback_url: "https://back-ghost-1.onrender.com/api/webhook/oxapay",
         return_url: "https://escapeghost.netlify.app",
         email: "customer@oxapay.com",
         order_id: tx._id.toString(),

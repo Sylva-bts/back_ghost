@@ -13,23 +13,26 @@ router.post("/withdraw", paymentLimiter, auth, async (req, res) => {
     const numAmount = Number(amount);
 
     if (isNaN(numAmount) || numAmount < 1 || numAmount > 5000) {
+      logger.warn(`Invalid withdrawal amount: ${amount} by user ${req.userId}`);
       return res.status(400).json({ error: "Montant invalide (1-5000 USD)" });
     }
 
     if (!address || typeof address !== 'string' || address.length < 20 || address.length > 100) {
+      logger.warn(`Invalid withdrawal address: ${address} by user ${req.userId}`);
       return res.status(400).json({ error: "Adresse invalide" });
     }
 
     if (network && !['TRC20', 'ERC20', 'BEP20'].includes(network.toUpperCase())) {
+      logger.warn(`Invalid network: ${network} by user ${req.userId}`);
       return res.status(400).json({ error: "Réseau invalide" });
     }
 
     const user = await User.findById(req.userId);
     if (user.balance < numAmount) {
-      return res.status(400).json({ error: "Solde insuffisant" });
+      return res.status(400).json({ error: "Insufficient balance" });
     }
 
-    // 1️⃣ Créer transaction (sans débiter encore)
+    // Create transaction
     const tx = await Transaction.create({
       userId: req.userId,
       type: "withdraw",
@@ -37,38 +40,36 @@ router.post("/withdraw", paymentLimiter, auth, async (req, res) => {
       status: "pending"
     });
 
-    // 2️⃣ Appel OxaPay payout
-    const url = "https://api.oxapay.com/v1/payout";
+    // Deduct balance immediately
+    user.balance -= numAmount;
+    await user.save();
+
+    // 2️⃣ OxaPay payout
+    const url = 'https://api.oxapay.com/v1/payout';
     const data = {
       address: address,
       amount: numAmount,
       currency: "TRX",
       network: network || "TRC20",
-      callback_url: `${process.env.BASE_URL}/api/webhook/oxapay`,
+      callback_url: "https://back-ghost-1.onrender.com/api/webhook/oxapay",
       memo: tx._id.toString(),
-      description: `Withdraw ${tx._id}`
+      description: "Order #12345"
     };
-
     const headers = {
       payout_api_key: process.env.OXAPAY_PAYOUT_API_KEY,
-      "Content-Type": "application/json"
+      'Content-Type': 'application/json'
     };
 
     const oxa = await axios.post(url, data, { headers });
 
-    if (!oxa.data || oxa.data.result !== true) {
-      throw new Error("OxaPay payout failed");
-    }
-
-    // 3️⃣ Sauvegarde du track_id
-    tx.oxapayTrackId = oxa.data.track_id;
+    tx.oxapayTrackId = oxa.data.trackId;
     await tx.save();
 
     res.json({ message: "Withdrawal requested", txId: tx._id });
-
   } catch (error) {
-    console.error("Withdraw error:", error.response?.data || error.message);
+    console.error("Withdraw error:", error);
     res.status(500).json({ error: "Erreur lors du retrait" });
   }
 });
+
 module.exports = router;
